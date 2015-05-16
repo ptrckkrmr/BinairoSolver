@@ -1,0 +1,9 @@
+# System files
+.DS_Store
+desktop.ini
+Thumbs.db
+
+# Output files
+target/
+*.class
+
