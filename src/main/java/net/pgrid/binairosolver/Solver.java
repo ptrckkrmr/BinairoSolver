@@ -16,16 +16,18 @@ import static net.pgrid.binairosolver.Game.State.ONE;
 import static net.pgrid.binairosolver.Game.State.ZERO;
 
 /**
- *
+ * Main class of the Binary puzzle solver.
  * @author Patrick Kramer
  */
 public class Solver {
     
-    public static final boolean ENABLE_DEBUG = false;
-    
     public static final Path INPUT  = Paths.get("samples/binairo2.txt");
     public static final Path OUTPUT = Paths.get("samples/binairo2.solution.txt");
     
+    /**
+     * Entry point of the application.
+     * @param args The command-line arguments.
+     */
     public static void main(String[] args) {
         Solver solver = new Solver();
         try {
@@ -44,15 +46,31 @@ public class Solver {
         }
     }
     
+    /**
+     * Solves the provided Game instance.
+     * 
+     * If the Game is unsolvable, this method returns the argument Game instance.
+     * 
+     * @param game The Game instance.
+     * @return     The solved Game.
+     */
     public Game solve(Game game) {
         try {
             return solveImpl(game);
         } catch (SolverException ex) {
+            debug(ex);
             return game;
         }
     }
     
+    /**
+     * Solves the provided Game instance, throwing a SolverException on failure.
+     * @param game The Game instance, not null.
+     * @return     The solved Game.
+     * @throws     SolverException - If the Game could not be solved.
+     */
     public Game solveImpl(Game game) throws SolverException {
+        assert game != null;
         Game original, newGame = game;
         do {
             original = newGame;
@@ -76,11 +94,36 @@ public class Solver {
         return newGame;
     }
     
+    /**
+     * Tries to guess a field on the board.
+     * @param game The Game instance, not null.
+     * @return     The solved Game.
+     * @throws     SolverException - If the Game could not be solved.
+     */
     public Game findGuess(Game game) throws SolverException {
-        Game result = game;
-        
-        return result;
+        int x = 0, y = 0;
+LOOP:   for (; x < game.getWidth(); x++) {
+            for (; y < game.getHeight(); y++) {
+                if (game.get(x,y) == State.EMPTY) {
+                    break LOOP;
+                }
+            }
+        }
+        if (!game.isValidCell(x, y)) {
+            throw new SolverException("Cannot find an empty cell.");
+        }
+        try {
+            return guessSolve(game, x, y, State.ZERO);
+        } catch (SolverException ex1) {
+            try {
+                return guessSolve(game, x, y, State.ONE);
+            } catch (SolverException ex2) {
+                ex2.addSuppressed(ex1);
+                throw ex2;
+            }
+        }
     }
+    
     
     /**
      * Tries to solve the Game using simple Rules.
@@ -101,6 +144,11 @@ public class Solver {
         return result;
     }
     
+    /**
+     * Inverts the argument State.
+     * @param s The State.
+     * @return  The inverse of the State.
+     */
     public State invert(State s) {
         switch (s) {
             case EMPTY: return EMPTY;
@@ -110,12 +158,28 @@ public class Solver {
         }
     }
     
+    /**
+     * Logs the given message.
+     * 
+     * The message is converted to a String using the {@code String.valueOf} 
+     * method.
+     * @param msg The message.
+     */
     public void debug(Object msg) {
-        if (ENABLE_DEBUG) {
-            System.out.println(msg);
-        }
+        System.out.println(msg);
     }
     
+    /**
+     * Performs a safe update on the provided Game instance.
+     * @param g The Game instance, not null.
+     * @param x The x coordinate.
+     * @param y The y coordinate.
+     * @param s The new State, nor null.
+     * @return  The updated board.
+     * @throws  SolverException - If a collision occurs. That is, if a 
+     *          {@code ZERO} State would be overwritten by a {@code ONE} State 
+     *          or the other way around.
+     */
     public Game checkedUpdate(Game g, int x, int y, State s) throws SolverException {
         if (x < 0 || y < 0 || x >= g.getWidth() || y >= g.getHeight()) {
             // Cannot update, ignore.
@@ -125,9 +189,6 @@ public class Solver {
         if (current == s) {
             return g;
         } else if (current == EMPTY) {
-            debug("Setting (" + x + "," + y + ") to " + s.getSymbol() + " (from " + Thread.currentThread().getStackTrace()[2].getMethodName() + ")");
-            debug(g);
-            debug("");
             g.set(x, y, s);
         } else {
             // Collision! Throw a SolverException
@@ -137,6 +198,15 @@ public class Solver {
         return g;
     }
     
+    /**
+     * Fills any remaining empty cells in the given row with the provided 
+     * value.
+     * @param game  The Game instance, not null.
+     * @param row   The row index, between 0 and {@code game.getHeight()}.
+     * @param value The State value, not null.
+     * @return      The Game with the filled states.
+     * @throws      SolverException - If an update collision occurs.
+     */
     public Game fillRemainingRow(Game game, int row, State value) throws SolverException {
         for (int x = 0; x < game.getWidth(); x++) {
             State s = game.get(x, row);
@@ -146,6 +216,16 @@ public class Solver {
         }
         return game;
     }
+    
+    /**
+     * Fills any remaining empty cells in the given column with the provided 
+     * value.
+     * @param game  The Game instance, not null.
+     * @param col   The column index, between 0 and {@code game.getWidth()}.
+     * @param value The State value, not null.
+     * @return      The Game with the filled states.
+     * @throws      SolverException - If an update collision occurs.
+     */
     public Game fillRemainingColumn(Game game, int col, State value) throws SolverException {
         for (int y = 0; y < game.getHeight(); y++) {
             State s = game.get(col, y);
